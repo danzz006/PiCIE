@@ -8,27 +8,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import faiss 
-import pdb
 
 from data.coco_train_dataset import TrainCOCO
 from data.coco_eval_dataset import EvalCOCO 
 from data.cityscapes_train_dataset import TrainCityscapes
 from data.cityscapes_eval_dataset import EvalCityscapes
-
-import cuml
-import cuml.dask
-# from cuml.cluster import HDBSCAN as cuDBSCAN
-# dbscan = cuml.dask.cluster.DBSCAN
-
-# from distributed import Client
-# from dask_cuda import LocalCUDACluster
-
-# if __name__ == "__main__":
-#     cluster = LocalCUDACluster(
-#             CUDA_VISIBLE_DEVICES=[0,1,2, 3],
-#         )
-#     client = Client(cluster)
-
 
 ################################################################################
 #                                  General-purpose                             #
@@ -167,7 +151,7 @@ def freeze_all(model):
 def initialize_classifier(args):
     classifier = get_linear(args.in_dim, args.K_train)
     classifier = nn.DataParallel(classifier)
-    classifier = classifier.to(f'cuda')
+    classifier = classifier.cuda()
 
     return classifier
 
@@ -197,44 +181,19 @@ def get_faiss_module(args):
     res = faiss.StandardGpuResources()
     cfg = faiss.GpuIndexFlatConfig()
     cfg.useFloat16 = False 
-    cfg.device     = args.faiss_gpu_id #NOTE: Single GPU only. 
+    cfg.device     = 0 #NOTE: Single GPU only. 
     idx = faiss.GpuIndexFlatL2(res, args.in_dim, cfg)
 
     return idx
 
-def get_init_centroids(args, K, featlist, index, clustering_="-DBSCAN"):
-    
-    if clustering_ == "DBSCAN":
-        # clus = cuDBSCAN(min_samples=5)
-        clus = cuml.dask.cluster.DBSCAN(client=args.client, 
-        output_type="cupy", 
-        max_mbytes_per_batch=8000, 
-        min_samples=300
-        )
-    
-        # clus = dbscan(min_samples=5)
-        print("Clustering features...")
-        clus.fit(featlist)
-        print("Done...")
-        
-        cluster_idx = np.where(clus.labels_ != -1)[0]
-        top_K_clusters_idx = np.unique(np.sort(cluster_idx))[-K:]
-        images_list = featlist[top_K_clusters_idx.get()]
-        # count_arr = np.bincount(clus.labels_[clus.labels_ != -1])
-        
-        # pdb.set_trace()
-        return images_list
+def get_init_centroids(args, K, featlist, index):
+    clus = faiss.Clustering(args.in_dim, K)
+    clus.seed  = np.random.randint(args.seed)
+    clus.niter = args.kmeans_n_iter
+    clus.max_points_per_centroid = 10000000
+    clus.train(featlist, index)
 
-    
-    
-    else:
-        clus = faiss.Clustering(args.in_dim, K)
-        clus.seed  = np.random.randint(args.seed)
-        clus.niter = args.kmeans_n_iter
-        clus.max_points_per_centroid = 10000000
-        clus.train(featlist, index)
-
-        return faiss.vector_float_to_array(clus.centroids).reshape(K, args.in_dim)
+    return faiss.vector_float_to_array(clus.centroids).reshape(K, args.in_dim)
 
 def module_update_centroids(index, centroids):
     index.reset()

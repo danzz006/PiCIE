@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn 
 
 from sklearn.utils.linear_assignment_ import linear_assignment
-# from scipy.optimize import linear_sum_assignment as linear_assignment
 from modules import fpn 
 from utils import *
 
@@ -15,8 +14,7 @@ def get_model_and_optimizer(args, logger):
     # Init model 
     model = fpn.PanopticFPN(args)
     model = nn.DataParallel(model)
-    # model = model.cuda()
-    model = model.to(f'cuda:{model.device_ids[0]}')
+    model = model.cuda()
 
     # Init classifier (for eval only.)
     classifier = initialize_classifier(args)
@@ -62,7 +60,7 @@ def run_mini_batch_kmeans(args, logger, dataloader, model, view):
     featslist    = []
     num_batches  = 0
     first_batch  = True
-    centroids_arr = []
+    
     # Choose which view it is now. 
     dataloader.dataset.view = view
 
@@ -72,7 +70,6 @@ def run_mini_batch_kmeans(args, logger, dataloader, model, view):
             # 1. Compute initial centroids from the first few batches. 
             if view == 1:
                 image = eqv_transform_if_needed(args, dataloader, indice, image.cuda(non_blocking=True))
-                # image = eqv_transform_if_needed(args, dataloader, indice, image.to(f'cuda'))
                 feats = model(image)
             elif view == 2:
                 image = image.cuda(non_blocking=True)
@@ -100,57 +97,40 @@ def run_mini_batch_kmeans(args, logger, dataloader, model, view):
                         # Compute initial centroids. 
                         # By doing so, we avoid empty cluster problem from mini-batch K-Means. 
                         featslist = torch.cat(featslist).cpu().numpy().astype('float32')
-                        st = 0
-                        count = int(featslist.shape[0]/4)
-                        for _ in range(int(args.batch_size_cluster/4)):
-                            centroids = get_init_centroids(args, args.K_train, featslist[st:count], faiss_module).astype('float32')
-                            centroids_arr.extend(list(centroids))
-                            st = count
-                            count += int(featslist.shape[0]/4)
-                        
-                        centroids = torch.tensor(centroids_arr, requires_grad=False).cuda()
-                        return centroids, 0
-                        
+                        centroids = get_init_centroids(args, args.K_train, featslist, faiss_module).astype('float32')
+                        D, I = faiss_module.search(featslist, 1)
 
-                        # D, I = faiss_module.search(featslist, 1)
-                        # kmeans_loss.update(D.mean())
-                        # logger.info('Initial k-means loss: {:.4f} '.format(kmeans_loss.avg))
+                        kmeans_loss.update(D.mean())
+                        logger.info('Initial k-means loss: {:.4f} '.format(kmeans_loss.avg))
                         
                         # Compute counts for each cluster. 
-                        # for k in np.unique(I):
-                        #     data_count[k] += len(np.where(I == k)[0])
+                        for k in np.unique(I):
+                            data_count[k] += len(np.where(I == k)[0])
                         first_batch = False
                     else:
                         b_feat = torch.cat(featslist)
-                        images_lists = [[] for _ in range(len(b_feat))]
-                        
-                        for i in range(len(b_feat)):
-                            # images_lists[deepcluster.labels_[i]].append(i)
-                            pass
-                        
-                        
-                        # faiss_module = module_update_centroids(faiss_module, centroids)
-                        # D, I = faiss_module.search(b_feat.numpy().astype('float32'), 1)
+                        faiss_module = module_update_centroids(faiss_module, centroids)
+                        D, I = faiss_module.search(b_feat.numpy().astype('float32'), 1)
 
-                        # kmeans_loss.update(D.mean())
+                        kmeans_loss.update(D.mean())
 
                         # Update centroids. 
-                        # for k in np.unique(I):
-                        #     idx_k = np.where(I == k)[0]
-                        #     data_count[k] += len(idx_k)
-                        #     centroid_lr    = len(idx_k) / (data_count[k] + 1e-6)
-                        #     centroids[k]   = (1 - centroid_lr) * centroids[k] + centroid_lr * b_feat[idx_k].mean(0).numpy().astype('float32')
+                        for k in np.unique(I):
+                            idx_k = np.where(I == k)[0]
+                            data_count[k] += len(idx_k)
+                            centroid_lr    = len(idx_k) / (data_count[k] + 1e-6)
+                            centroids[k]   = (1 - centroid_lr) * centroids[k] + centroid_lr * b_feat[idx_k].mean(0).numpy().astype('float32')
                     
                     # Empty. 
                     featslist   = []
                     num_batches = args.num_init_batches - args.num_batches
 
-            # if (i_batch % 100) == 0:
-            #     logger.info('[Saving features]: {} / {} | [K-Means Loss]: {:.4f}'.format(i_batch, len(dataloader), kmeans_loss.avg))
+            if (i_batch % 100) == 0:
+                logger.info('[Saving features]: {} / {} | [K-Means Loss]: {:.4f}'.format(i_batch, len(dataloader), kmeans_loss.avg))
 
-    centroids = torch.tensor(centroids_arr, requires_grad=False).cuda()
+    centroids = torch.tensor(centroids, requires_grad=False).cuda()
 
-    return centroids, 0
+    return centroids, kmeans_loss.avg
 
 
 
@@ -211,8 +191,7 @@ def evaluate(args, logger, dataloader, classifier, model):
     classifier.eval()
     with torch.no_grad():
         for i, (_, image, label) in enumerate(dataloader):
-            # image = image.cuda(non_blocking=True)
-            image = image.to(f'cuda:{model.device_ids[0]}')
+            image = image.cuda(non_blocking=True)
             feats = model(image)
 
             if args.metric_test == 'cosine':

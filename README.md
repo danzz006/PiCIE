@@ -18,6 +18,8 @@ Contact: Jang Hyun Cho [janghyuncho7@utexas.edu](mailto:janghyuncho7@utexas.edu)
 
 Please feel free to reach out for any questions or discussions!
 ## News 
+[12/10/2021] Fixed visualization notebook. 
+
 [12/10/2021] Training and evaluation code for cityscapes dataset for PiCIE and MDC with trained weights and logs. 
 
 [07/31/2021] Minor update on the training dataset module (please see this [issue](https://github.com/janghyuncho/PiCIE/issues/7)).
@@ -36,7 +38,7 @@ conda env create -f env.yml
 ~~~
 
 ### Preparing Dataset 
-Please download the [trainset](http://images.cocodataset.org/zips/train2017.zip) and the [validset](http://images.cocodataset.org/zips/val2017.zip) of COCO dataset as well as the [annotations](http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip) and the [json files](http://images.cocodataset.org/annotations/annotations_trainval2017.zip). Place the dataset as following:
+Please download the [trainset](http://images.cocodataset.org/zips/train2017.zip) and the [validset](http://images.cocodataset.org/zips/val2017.zip) of COCO dataset as well as the [annotations](http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip). Place the dataset as following:
 ~~~
 /your/dataset/directory/
       └── coco/
