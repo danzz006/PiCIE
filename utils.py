@@ -206,11 +206,14 @@ def get_init_centroids(args, K, featlist, index, clustering_="DBSCAN"):
     
     if clustering_ == "DBSCAN":
         # clus = cuDBSCAN(min_samples=5)
-        clus = cuml.dask.cluster.DBSCAN(client=args.client, 
-        output_type="cupy", 
-        max_mbytes_per_batch=8000, 
-        min_samples=300
-        )
+        if args.dist_:
+            clus = cuml.dask.cluster.DBSCAN(client=args.client, 
+            output_type="cupy", 
+            max_mbytes_per_batch=8000, 
+            min_samples=300
+            )
+        else:
+            clus = cuml.cluster.DBSCAN()
     
         # clus = dbscan(min_samples=5)
         print("Clustering features...")
