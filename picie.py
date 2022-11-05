@@ -12,9 +12,96 @@ from commons import *
 from modules import fpn 
 from distributed import Client
 from dask_cuda import LocalCUDACluster
+from copy import copy
 
 
 # In[8]:
+
+
+def train_supervised(args, logger, dataloader, model, classifier1, classifier2, criterion1, criterion2, optimizer, epoch):
+    losses = AverageMeter()
+    losses_mse = AverageMeter()
+    losses_cet = AverageMeter()
+    losses_cet_across = AverageMeter()
+    losses_cet_within = AverageMeter()
+
+    # switch to train mode
+    model.train()
+    if args.mse:
+        criterion_mse = torch.nn.MSELoss().cuda()
+
+    classifier1.eval()
+    classifier2.eval()
+    for i, (indice, input1, label1) in enumerate(dataloader):
+        input1 = eqv_transform_if_needed(args, dataloader, indice, input1.cuda(non_blocking=True))
+        label1 = label1.cuda(non_blocking=True)
+        featmap1 = model(input1)
+        featmap1 = F.interpolate(featmap1, label1.shape[-2:], mode='bilinear', align_corners=False)
+        
+        # input2 = input2.cuda(non_blocking=True)
+        # label2 = label2.cuda(non_blocking=True)
+        # featmap2 = eqv_transform_if_needed(args, dataloader, indice, model(input2))
+
+        B, C, _ = featmap1.size()[:3]
+        if i == 0:
+            logger.info('Batch input size   : {}'.format(list(input1.shape)))
+            logger.info('Batch label size   : {}'.format(list(label1.shape)))
+            logger.info('Batch feature size : {}\n'.format(list(featmap1.shape)))
+        
+        if args.metric_train == 'cosine':
+            featmap1 = F.normalize(featmap1, dim=1, p=2)
+            # featmap2 = F.normalize(featmap2, dim=1, p=2)
+
+        featmap12_processed, label12_processed = featmap1, label1.flatten()
+        # featmap21_processed, label21_processed = featmap2, label1.flatten()
+
+        # Cross-view loss
+        output12 = feature_flatten(classifier2(featmap12_processed)) # NOTE: classifier2 is coupled with label2
+        # output21 = feature_flatten(classifier1(featmap21_processed)) # NOTE: classifier1 is coupled with label1
+        
+        loss12  = criterion2(output12, label12_processed)
+        # loss21  = criterion1(output21, label21_processed)  
+
+        # loss_across = (loss12 + loss21) / 2.
+        loss_across = loss12 
+        losses_cet_across.update(loss_across.item(), B)
+
+        featmap11_processed, label11_processed = featmap1, label1.flatten()
+        # featmap22_processed, label22_processed = featmap2, label2.flatten()
+        
+        # Within-view loss
+        output11 = feature_flatten(classifier1(featmap11_processed)) # NOTE: classifier1 is coupled with label1
+        # output22 = feature_flatten(classifier2(featmap22_processed)) # NOTE: classifier2 is coupled with label2
+
+        loss11 = criterion1(output11, label11_processed)
+        # loss22 = criterion2(output22, label22_processed)
+
+        loss_within = loss11
+        # loss_within = (loss11 + loss22) / 2. 
+        losses_cet_within.update(loss_within.item(), B)
+        loss = (loss_across + loss_within) / 2.
+        
+        losses_cet.update(loss.item(), B)
+        
+        if args.mse:
+            loss_mse = criterion_mse(featmap1, featmap2)
+            losses_mse.update(loss_mse.item(), B)
+
+            loss = (loss + loss_mse) / 2. 
+        
+        # record loss
+        losses.update(loss.item(), B)
+
+        # compute gradient and do step
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if (i % 200) == 0:
+            logger.info('{0} / {1}\t'.format(i, len(dataloader)))
+
+    return losses.avg, losses_cet.avg, losses_cet_within.avg, losses_cet_across.avg, losses_mse.avg
+
 
 
 def train(args, logger, dataloader, model, classifier1, classifier2, criterion1, criterion2, optimizer, epoch):
@@ -99,6 +186,8 @@ def train(args, logger, dataloader, model, classifier1, classifier2, criterion1,
     return losses.avg, losses_cet.avg, losses_cet_within.avg, losses_cet_across.avg, losses_mse.avg
 
 
+
+
 # In[9]:
 
 
@@ -124,6 +213,18 @@ def main(args, logger):
                                             pin_memory=False,
                                             collate_fn=collate_train,
                                             worker_init_fn=worker_init_fn(args.seed))
+    
+    
+    # if True:
+    #     trainset_supervised = get_dataset(args, mode='supervised_train', inv_list=inv_list, eqv_list=eqv_list)
+    #     trainloader_supervised = torch.utils.data.DataLoader(trainset_supervised, 
+    #                                             batch_size=args.batch_size_train,
+    #                                             shuffle=False, 
+    #                                             num_workers=args.num_workers,
+    #                                             pin_memory=False,
+    #                                             collate_fn=collate_train,
+    #                                             worker_init_fn=worker_init_fn(args.seed))
+        
     
     testset    = get_dataset(args, mode='train_val')
     testloader = torch.utils.data.DataLoader(testset,
@@ -189,9 +290,35 @@ def main(args, logger):
                                                             pin_memory=False,
                                                             collate_fn=collate_train,
                                                             worker_init_fn=worker_init_fn(args.seed))
-
-            logger.info('Start training ...')
-            train_loss, train_cet, cet_within, cet_across, train_mse = train(args, logger, trainloader_loop, model, classifier1, classifier2, criterion1, criterion2, optimizer, epoch) 
+            
+            
+            
+            
+            
+            if epoch != 0 and epoch % 4 == 0:
+                
+                if not args.no_balance:
+                    criterion1 = torch.nn.CrossEntropyLoss(weight=weight1, ignore_index=-1).cuda()
+                    criterion2 = torch.nn.CrossEntropyLoss(weight=weight2, ignore_index=-1).cuda()
+                else:
+                    criterion1 = torch.nn.CrossEntropyLoss().cuda()
+                    criterion2 = torch.nn.CrossEntropyLoss().cuda()
+                
+                logger.info('Start supervised training ...')
+                trainset_supervised = get_dataset(args, mode='supervised_train', inv_list=inv_list, eqv_list=eqv_list)
+                trainloader_supervised = torch.utils.data.DataLoader(trainset_supervised, 
+                                                batch_size=args.batch_size_train,
+                                                shuffle=False, 
+                                                num_workers=args.num_workers,
+                                                pin_memory=False,
+                                                collate_fn=collate_eval,
+                                                worker_init_fn=worker_init_fn(args.seed))
+                
+                train_loss, train_cet, cet_within, cet_across, train_mse = train_supervised(args, logger, trainloader_supervised, model, classifier1, classifier2, criterion1, criterion2, optimizer, epoch)
+            else:
+                logger.info('Start training ...')
+                train_loss, train_cet, cet_within, cet_across, train_mse = train(args, logger, trainloader_loop, model, classifier1, classifier2, criterion1, criterion2, optimizer, epoch) 
+            
             acc1, res1 = evaluate(args, logger, testloader, classifier1, model)
             acc2, res2 = evaluate(args, logger, testloader, classifier2, model)
             
@@ -205,9 +332,10 @@ def main(args, logger):
             logger.info('  [View 2] ACC: {:.4f} | mIoU: {:.4f}'.format(acc2, res2['mean_iou']))
             logger.info('========================================\n')
             
-
+            saving_args = copy(args)
+            del saving_args.client
             torch.save({'epoch': epoch+1, 
-                        'args' : args,
+                        'args' : saving_args,
                         'state_dict': model.state_dict(),
                         'classifier1_state_dict' : classifier1.state_dict(),
                         'classifier2_state_dict' : classifier2.state_dict(),
@@ -216,7 +344,7 @@ def main(args, logger):
                         os.path.join(args.save_model_path, 'checkpoint_{}.pth.tar'.format(epoch)))
             
             torch.save({'epoch': epoch+1, 
-                        'args' : args,
+                        'args' : saving_args,
                         'state_dict': model.state_dict(),
                         'classifier1_state_dict' : classifier1.state_dict(),
                         'classifier2_state_dict' : classifier2.state_dict(),
@@ -277,12 +405,13 @@ def main(args, logger):
 class Arguments:
     def __init__(self, 
                 data_root='../../Data/coco',
+                supervised_data_root = '../../Data/coco_supervisedset',
                 save_root='results',
                 restart_path='',
                 seed=1,
                 num_workers=6,
                 restart=True,
-                num_epoch=10,
+                num_epoch=20,
                 repeats=1,
                 arch='resnet18',
                 pretrain=True,
@@ -290,8 +419,8 @@ class Arguments:
                 res1=320,
                 res2=640,
                 batch_size_cluster=4,
-                batch_size_train=64,
-                batch_size_test=64,
+                batch_size_train=32,
+                batch_size_test=8,
                 lr=1e-4,
                 weight_decay=0,
                 momentum=0.9,
@@ -330,6 +459,7 @@ class Arguments:
                 ):
 
         self.data_root=data_root
+        self.supervised_data_root=supervised_data_root
         self.save_root=save_root
         self.restart_path=restart_path
         self.seed=seed

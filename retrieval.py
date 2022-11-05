@@ -61,7 +61,8 @@ def get_nearest_neighbors(n_query, dataloader, model, classifier, k=10):
             image = image.cuda(non_blocking=True)
             feats = model(image)
             feats = F.normalize(feats, dim=1, p=2)
-            dists = compute_dist(feats, classifier) # (B x C x H x W)
+            dists = compute_dist(feats.cpu(), classifier) # (B x C x H x W)
+            dists = dists.cpu()
             B, _, H, W = dists.shape
             for c in range(n_query):
                 dst, idx = dists[:, c].flatten().topk(1)
@@ -71,10 +72,18 @@ def get_nearest_neighbors(n_query, dataloader, model, classifier, k=10):
                 ih = idx%(H*W)//W 
                 iw = idx%(H*W)%W
                 if len(min_dsts[c]) < k:
-                    min_dsts[c].append(dst)
+                    min_dsts[c].append(dst.cpu())
                     min_locs[c].append((ib, ih, iw))
                     min_imgs[c].append(indice[ib])
-                elif dst < max(min_dsts[c]):
+                    
+                    # for i in range(len(min_dsts[c])):
+                    #     min_dsts[c][i] = min_dsts[c][i].cpu()
+                elif dst.cpu() < max(min_dsts[c]):
+                    
+                    # for i in range(len(min_dsts[c])):
+                    #     min_dsts[c][i] = min_dsts[c][i].cpu()
+                    # min_dsts[c][-1] = min_dsts[c][-1].cpu()
+                    
                     imax = np.argmax(min_dsts[c])
 
                     min_dsts[c] = min_dsts[c][:imax] + min_dsts[c][imax+1:]
@@ -90,8 +99,117 @@ def get_nearest_neighbors(n_query, dataloader, model, classifier, k=10):
     imglist = [[dataset.transform_data(*dataset.load_data(dataset.imdb[i]), i, raw_image=True) for i in ids] for ids in min_imgs]
     return imglist, loclist
 
+class Arguments:
+    def __init__(self, 
+                data_root='../../Data/coco',
+                save_root='results',
+                restart_path='',
+                seed=1,
+                num_workers=6,
+                restart=True,
+                num_epoch=10,
+                repeats=1,
+                arch='resnet18',
+                pretrain=True,
+                res=320,
+                res1=320,
+                res2=640,
+                batch_size_cluster=4,
+                batch_size_train=128,
+                batch_size_test=64,
+                lr=1e-4,
+                weight_decay=0,
+                momentum=0.9,
+                optim_type='Adam',
+                num_init_batches=3,
+                num_batches=3,
+                kmeans_n_iter=30,
+                in_dim=128,
+                X=80,
+                metric_train='cosine',
+                metric_test='cosine',
+                K_train=27,
+                K_test=27,
+                no_balance=False,
+                mse=False,
+                augment=False,
+                equiv=False,
+                min_scale=0.5,
+                stuff=True,
+                thing=True,
+                jitter=False,
+                grey=False,
+                blur=False,
+                h_flip=False,
+                v_flip=False,
+                random_crop=False,
+                val_type='train',
+                version=7,
+                fullcoco=False,
+                eval_only=False,
+                eval_path='K_train/checkpoint.pth.tar',
+                save_model_path='K_train',
+                save_eval_path='K_test',
+                cityscapes=False,
+                faiss_gpu_id=1
+                ):
+
+        self.data_root=data_root
+        self.save_root=save_root
+        self.restart_path=restart_path
+        self.seed=seed
+        self.num_workers=num_workers
+        self.restart=restart
+        self.num_epoch=num_epoch
+        self.repeats=repeats
+        self.arch=arch
+        self.pretrain=pretrain
+        self.res=res
+        self.res1=res1
+        self.res2=res2
+        self.batch_size_cluster=batch_size_cluster
+        self.batch_size_train=batch_size_train
+        self.batch_size_test=batch_size_test
+        self.lr=lr
+        self.weight_decay=weight_decay
+        self.momentum=momentum
+        self.optim_type=optim_type
+        self.num_init_batches=num_init_batches
+        self.num_batches=num_batches
+        self.kmeans_n_iter=kmeans_n_iter
+        self.in_dim=in_dim
+        self.X=X
+        self.metric_train=metric_train
+        self.metric_test=metric_test
+        self.K_train=K_train
+        self.K_test=K_test
+        self.no_balance=no_balance
+        self.mse=mse
+        self.augment=augment
+        self.equiv=equiv
+        self.min_scale=min_scale
+        self.stuff=stuff
+        self.thing=thing
+        self.jitter=jitter
+        self.grey=grey
+        self.blur=blur
+        self.h_flip=h_flip
+        self.v_flip=v_flip
+        self.random_crop=random_crop
+        self.val_type=val_type
+        self.cityscapes = cityscapes
+        self.version=version
+        self.fullcoco=fullcoco
+        self.eval_only=eval_only
+        self.eval_path=eval_path
+        self.save_eval_path = save_eval_path
+        self.save_model_path = save_model_path
+        self.faiss_gpu_id = faiss_gpu_id
+
+
 if __name__ == '__main__':
-    args = parse_arguments()
+    args = Arguments()
+    # args = parse_arguments()
     
     # Use random seed.
     fix_seed_for_reproducability(args.seed)
