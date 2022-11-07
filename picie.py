@@ -236,7 +236,7 @@ def main(args, logger):
                                              worker_init_fn=worker_init_fn(args.seed))
     
     # Before train.
-    _, _ = evaluate(args, logger, testloader, classifier1, model)
+    # _, _ = evaluate(args, logger, testloader, classifier1, model)
     
     if not args.eval_only:
         # Train start.
@@ -247,59 +247,55 @@ def main(args, logger):
 
             # Adjust lr if needed. 
             # adjust_learning_rate(optimizer, epoch, args)
-
-            logger.info('\n============================= [Epoch {}] =============================\n'.format(epoch))
-            logger.info('Start computing centroids.')
-            t1 = t.time()
-            centroids1, kmloss1 = run_mini_batch_kmeans(args, logger, trainloader, model, view=1)
-            centroids2, kmloss2 = run_mini_batch_kmeans(args, logger, trainloader, model, view=2)
-            logger.info('-Centroids ready. [Loss: {:.5f}| {:.5f}/ Time: {}]\n'.format(kmloss1, kmloss2, get_datetime(int(t.time())-int(t1))))
-            
-            # Compute cluster assignment. 
-            t2 = t.time()
-            weight1 = compute_labels(args, logger, trainloader, model, centroids1, view=1)
-            weight2 = compute_labels(args, logger, trainloader, model, centroids2, view=2)
-            logger.info('-Cluster labels ready. [{}]\n'.format(get_datetime(int(t.time())-int(t2)))) 
-            
-            # Criterion.
-            if not args.no_balance:
-                criterion1 = torch.nn.CrossEntropyLoss(weight=weight1).cuda()
-                criterion2 = torch.nn.CrossEntropyLoss(weight=weight2).cuda()
-            else:
-                criterion1 = torch.nn.CrossEntropyLoss().cuda()
-                criterion2 = torch.nn.CrossEntropyLoss().cuda()
-
-            # Setup nonparametric classifier.
             classifier1 = initialize_classifier(args)
             classifier2 = initialize_classifier(args)
-            classifier1.module.weight.data = centroids1.unsqueeze(-1).unsqueeze(-1)
-            classifier2.module.weight.data = centroids2.unsqueeze(-1).unsqueeze(-1)
+            if epoch == 0 or epoch % 4 != 0 :
+                logger.info('\n============================= [Epoch {}] =============================\n'.format(epoch))
+                logger.info('Start computing centroids.')
+                t1 = t.time()
+                centroids1, kmloss1 = run_mini_batch_kmeans(args, logger, trainloader, model, view=1)
+                centroids2, kmloss2 = run_mini_batch_kmeans(args, logger, trainloader, model, view=2)
+                logger.info('-Centroids ready. [Loss: {:.5f}| {:.5f}/ Time: {}]\n'.format(kmloss1, kmloss2, get_datetime(int(t.time())-int(t1))))
+                
+                # Compute cluster assignment. 
+                t2 = t.time()
+                weight1 = compute_labels(args, logger, trainloader, model, centroids1, view=1)
+                weight2 = compute_labels(args, logger, trainloader, model, centroids2, view=2)
+                logger.info('-Cluster labels ready. [{}]\n'.format(get_datetime(int(t.time())-int(t2)))) 
+                
+                # Criterion.
+                if not args.no_balance:
+                    criterion1 = torch.nn.CrossEntropyLoss(weight=weight1).cuda()
+                    criterion2 = torch.nn.CrossEntropyLoss(weight=weight2).cuda()
+                else:
+                    criterion1 = torch.nn.CrossEntropyLoss().cuda()
+                    criterion2 = torch.nn.CrossEntropyLoss().cuda()
+
+            # Setup nonparametric classifier.
+                classifier1.module.weight.data = centroids1.unsqueeze(-1).unsqueeze(-1)
+                classifier2.module.weight.data = centroids2.unsqueeze(-1).unsqueeze(-1)
+                del centroids1 
+                del centroids2
+                # Set-up train loader.
+                trainset.mode  = 'train'
+                trainloader_loop  = torch.utils.data.DataLoader(trainset, 
+                                                                batch_size=args.batch_size_train, 
+                                                                shuffle=True,
+                                                                num_workers=args.num_workers,
+                                                                pin_memory=False,
+                                                                collate_fn=collate_train,
+                                                                worker_init_fn=worker_init_fn(args.seed))
+                
             freeze_all(classifier1)
             freeze_all(classifier2)
 
-            # Delete since no longer needed. 
-            del centroids1 
-            del centroids2
 
-            # Set-up train loader.
-            trainset.mode  = 'train'
-            trainloader_loop  = torch.utils.data.DataLoader(trainset, 
-                                                            batch_size=args.batch_size_train, 
-                                                            shuffle=True,
-                                                            num_workers=args.num_workers,
-                                                            pin_memory=False,
-                                                            collate_fn=collate_train,
-                                                            worker_init_fn=worker_init_fn(args.seed))
-            
-            
-            
-            
             
             if epoch != 0 and epoch % 4 == 0:
                 
                 if not args.no_balance:
-                    criterion1 = torch.nn.CrossEntropyLoss(weight=weight1, ignore_index=-1).cuda()
-                    criterion2 = torch.nn.CrossEntropyLoss(weight=weight2, ignore_index=-1).cuda()
+                    criterion1 = torch.nn.CrossEntropyLoss(ignore_index=-1).cuda()
+                    criterion2 = torch.nn.CrossEntropyLoss(ignore_index=-1).cuda()
                 else:
                     criterion1 = torch.nn.CrossEntropyLoss().cuda()
                     criterion2 = torch.nn.CrossEntropyLoss().cuda()
@@ -323,8 +319,8 @@ def main(args, logger):
             acc2, res2 = evaluate(args, logger, testloader, classifier2, model)
             
             logger.info('============== Epoch [{}] =============='.format(epoch))
-            logger.info('  Time: [{}]'.format(get_datetime(int(t.time())-int(t1))))
-            logger.info('  K-Means loss   : {:.5f} | {:.5f}'.format(kmloss1, kmloss2))
+            # logger.info('  Time: [{}]'.format(get_datetime(int(t.time())-int(t1))))
+            # logger.info('  K-Means loss   : {:.5f} | {:.5f}'.format(kmloss1, kmloss2))
             logger.info('  Training Total Loss  : {:.5f}'.format(train_loss))
             logger.info('  Training CE Loss (Total | Within | Across) : {:.5f} | {:.5f} | {:.5f}'.format(train_cet, cet_within, cet_across))
             logger.info('  Training MSE Loss (Total) : {:.5f}'.format(train_mse))
@@ -404,7 +400,6 @@ def main(args, logger):
 
 class Arguments:
     def __init__(self, 
-                dist_ = True,
                 data_root='../../Data/coco',
                 supervised_data_root = '../../Data/coco_supervisedset',
                 save_root='results',
@@ -412,7 +407,7 @@ class Arguments:
                 seed=1,
                 num_workers=6,
                 restart=True,
-                num_epoch=20,
+                num_epoch=100,
                 repeats=1,
                 arch='resnet18',
                 pretrain=True,
@@ -458,7 +453,7 @@ class Arguments:
                 cityscapes=False,
                 faiss_gpu_id=1
                 ):
-        self.dist_ = dist_
+
         self.data_root=data_root
         self.supervised_data_root=supervised_data_root
         self.save_root=save_root
@@ -522,17 +517,14 @@ args = Arguments()
 if __name__=='__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3"
     logger = set_logger(os.path.join(args.save_eval_path, 'train.log'))
-    if args.dist_:
-        cluster = LocalCUDACluster(
-                CUDA_VISIBLE_DEVICES=[0,1,2,3],
-            )
-        
-        client = Client(cluster)    
-        args.client = client
-    else:    
-        args.client = None
+    cluster = LocalCUDACluster(
+            CUDA_VISIBLE_DEVICES=[0,1,2,3],
+        )
+    
+    client = Client(cluster)    
+    args.client = client
     main(args, logger)
-
+    client.close()
 
 # In[ ]:
 
