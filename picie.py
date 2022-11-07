@@ -400,6 +400,7 @@ def main(args, logger):
 
 class Arguments:
     def __init__(self, 
+                dist_ = True,
                 data_root='../../Data/coco',
                 supervised_data_root = '../../Data/coco_supervisedset',
                 save_root='results',
@@ -453,7 +454,7 @@ class Arguments:
                 cityscapes=False,
                 faiss_gpu_id=1
                 ):
-
+        self.dist_ = dist_
         self.data_root=data_root
         self.supervised_data_root=supervised_data_root
         self.save_root=save_root
@@ -515,14 +516,19 @@ args = Arguments()
 
 
 if __name__=='__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3"
+    # os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3"
     logger = set_logger(os.path.join(args.save_eval_path, 'train.log'))
-    cluster = LocalCUDACluster(
-            CUDA_VISIBLE_DEVICES=[0,1,2,3],
-        )
     
-    client = Client(cluster)    
-    args.client = client
+    if args.dist_:
+        cluster = LocalCUDACluster(
+                CUDA_VISIBLE_DEVICES=[0,1,2,3],
+            )
+
+        client = Client(cluster)    
+        args.client = client
+    else:    
+        args.client = None
+    
     main(args, logger)
     client.close()
 
