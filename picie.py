@@ -259,6 +259,15 @@ def main(args, logger):
                 
                 # Compute cluster assignment. 
                 t2 = t.time()
+                trainloader = torch.utils.data.DataLoader(trainset, 
+                                                        batch_size=2048 if torch.cuda.device_count() == 4 else 128*torch.cuda.device_count(),
+                                                        shuffle=False, 
+                                                        num_workers=args.num_workers,
+                                                        pin_memory=False,
+                                                        collate_fn=collate_train,
+                                                        worker_init_fn=worker_init_fn(args.seed))
+
+                print("Reinitialized trainloader")
                 weight1 = compute_labels(args, logger, trainloader, model, centroids1, view=1)
                 weight2 = compute_labels(args, logger, trainloader, model, centroids2, view=2)
                 logger.info('-Cluster labels ready. [{}]\n'.format(get_datetime(int(t.time())-int(t2)))) 
@@ -408,7 +417,7 @@ class Arguments:
                 seed=1,
                 num_workers=6,
                 restart=True,
-                num_epoch=100,
+                num_epoch=300,
                 repeats=1,
                 arch='resnet18',
                 pretrain=True,
@@ -516,9 +525,8 @@ args = Arguments()
 
 
 if __name__=='__main__':
-    # os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3"
+    os.environ['CUDA_VISIBLE_DEVICES'] = "1,2,3"
     logger = set_logger(os.path.join(args.save_eval_path, 'train.log'))
-    
     if args.dist_:
         cluster = LocalCUDACluster(
                 CUDA_VISIBLE_DEVICES=[0,1,2,3],
@@ -527,13 +535,10 @@ if __name__=='__main__':
         client = Client(cluster)    
         args.client = client
     else:    
-        args.client = None
-    
+        args.client = None  
+    args.client = client
     main(args, logger)
     client.close()
-
-# In[ ]:
-
 
 
 
