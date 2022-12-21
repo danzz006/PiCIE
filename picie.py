@@ -254,48 +254,47 @@ def main(args, logger):
 
             logger.info('\n============================= [Epoch {}] =============================\n'.format(epoch))
             if epoch == 0 or epoch % 9 == 0:
-                    logger.info('Start computing centroids.')
-                    t1 = t.time()
-                    centroids1, kmloss1 = run_mini_batch_kmeans(args, logger, trainloader, model, view=1)
-                    centroids2, kmloss2 = run_mini_batch_kmeans(args, logger, trainloader, model, view=2)
-                    logger.info('-Centroids ready. [Loss: {:.5f}| {:.5f}/ Time: {}]\n'.format(kmloss1, kmloss2, get_datetime(int(t.time())-int(t1))))
+                logger.info('Start computing centroids.')
+                t1 = t.time()
+                centroids1, kmloss1 = run_mini_batch_kmeans(args, logger, trainloader, model, view=1)
+                centroids2, kmloss2 = run_mini_batch_kmeans(args, logger, trainloader, model, view=2)
+                logger.info('-Centroids ready. [Loss: {:.5f}| {:.5f}/ Time: {}]\n'.format(kmloss1, kmloss2, get_datetime(int(t.time())-int(t1))))
             
-            # Compute cluster assignment. 
-            t2 = t.time()
-            
-            trainloader_assignment = torch.utils.data.DataLoader(trainset, 
-                                            batch_size=512,
-                                            shuffle=False, 
-                                            num_workers=args.num_workers,
-                                            pin_memory=False,
-                                            collate_fn=collate_train,
-                                            worker_init_fn=worker_init_fn(args.seed))
-            
-            print("reinitialized dataloader for label assignment")
-            
-            
-            weight1 = compute_labels(args, logger, trainloader_assignment, model, centroids1, view=1)
-            weight2 = compute_labels(args, logger, trainloader_assignment, model, centroids2, view=2)
-            logger.info('-Cluster labels ready. [{}]\n'.format(get_datetime(int(t.time())-int(t2)))) 
-            
-            # Criterion.
-            if not args.no_balance:
-                criterion1 = torch.nn.CrossEntropyLoss(weight=weight1).cuda()
-                criterion2 = torch.nn.CrossEntropyLoss(weight=weight2).cuda()
-            else:
-                criterion1 = torch.nn.CrossEntropyLoss().cuda()
-                criterion2 = torch.nn.CrossEntropyLoss().cuda()
+                # Compute cluster assignment. 
+                t2 = t.time()
+                
+                trainloader_assignment = torch.utils.data.DataLoader(trainset, 
+                                                batch_size=512,
+                                                shuffle=False, 
+                                                num_workers=args.num_workers,
+                                                pin_memory=False,
+                                                collate_fn=collate_train,
+                                                worker_init_fn=worker_init_fn(args.seed))
+                
+                print("reinitialized dataloader for label assignment")
+                
+                
+                weight1 = compute_labels(args, logger, trainloader_assignment, model, centroids1, view=1)
+                weight2 = compute_labels(args, logger, trainloader_assignment, model, centroids2, view=2)
+                logger.info('-Cluster labels ready. [{}]\n'.format(get_datetime(int(t.time())-int(t2)))) 
+                
+                # Criterion.
+                if not args.no_balance:
+                    criterion1 = torch.nn.CrossEntropyLoss(weight=weight1).cuda()
+                    criterion2 = torch.nn.CrossEntropyLoss(weight=weight2).cuda()
+                else:
+                    criterion1 = torch.nn.CrossEntropyLoss().cuda()
+                    criterion2 = torch.nn.CrossEntropyLoss().cuda()
 
-            # Setup nonparametric classifier.
-            classifier1 = initialize_classifier(args, "cuda")
-            classifier2 = initialize_classifier(args, "cuda")
-            classifier1.module.weight.data = centroids1.unsqueeze(-1).unsqueeze(-1)
-            classifier2.module.weight.data = centroids2.unsqueeze(-1).unsqueeze(-1)
-            freeze_all(classifier1)
-            freeze_all(classifier2)
+                # Setup nonparametric classifier.
+                classifier1 = initialize_classifier(args, "cuda")
+                classifier2 = initialize_classifier(args, "cuda")
+                classifier1.module.weight.data = centroids1.unsqueeze(-1).unsqueeze(-1)
+                classifier2.module.weight.data = centroids2.unsqueeze(-1).unsqueeze(-1)
+                freeze_all(classifier1)
+                freeze_all(classifier2)
 
-            # Delete since no longer needed. 
-            if epoch == 0 or epoch % 9 == 0:
+                # Delete since no longer needed. 
                 del centroids1 
                 del centroids2
 
@@ -344,8 +343,8 @@ def main(args, logger):
                     scheduler.step()
                     writer.add_scalar("lr/train", scheduler.get_lr()[0], epoch)
             
-            acc1, res1 = evaluate(args, logger, testloader, classifier1, model)
-            acc2, res2 = evaluate(args, logger, testloader, classifier2, model)
+            acc1, res1 = evaluate(args, logger, testloader, classifier1, model, writer, epoch)
+            acc2, res2 = evaluate(args, logger, testloader, classifier2, model, writer, epoch)
             
             logger.info('============== Epoch [{}] =============='.format(epoch))
             logger.info('  Time: [{}]'.format(get_datetime(int(t.time())-int(t1))))
