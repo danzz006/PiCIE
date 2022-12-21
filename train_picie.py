@@ -13,8 +13,8 @@ from modules import fpn
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_root', type=str, required=True)
-    parser.add_argument('--save_root', type=str, required=True)
+    parser.add_argument('--data_root', type=str, default="../../Data/coco", required=True)
+    parser.add_argument('--save_root', type=str, default="results",  required=True)
     parser.add_argument('--restart_path', type=str)
     parser.add_argument('--comment', type=str, default='')
     parser.add_argument('--seed', type=int, default=2021, help='Random seed for reproducability.')

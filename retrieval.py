@@ -129,7 +129,7 @@ class Arguments:
                 metric_train='cosine',
                 metric_test='cosine',
                 K_train=27,
-                K_test=27,
+                K_test=5,
                 no_balance=False,
                 mse=False,
                 augment=False,

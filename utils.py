@@ -164,10 +164,11 @@ def freeze_all(model):
         param.requires_grad = False 
 
 
-def initialize_classifier(args):
+def initialize_classifier(args, mapping_device):
     classifier = get_linear(args.in_dim, args.K_train)
     classifier = nn.DataParallel(classifier)
-    classifier = classifier.to(f'cuda')
+    # classifier = classifier.to(mapping_device)
+    classifier = classifier.cuda()
 
     return classifier
 
@@ -202,7 +203,7 @@ def get_faiss_module(args):
 
     return idx
 
-def get_init_centroids(args, K, featlist, index, clustering_="-DBSCAN"):
+def get_init_centroids(args, K, featlist, index, clustering_="DBSCAN"):
     
     if clustering_ == "DBSCAN":
         # clus = cuDBSCAN(min_samples=5)
@@ -321,7 +322,10 @@ def collate_train(batch):
     
     indice = [b[0] for b in batch]
     image1 = torch.stack([b[1] for b in batch])
+    # image_raw = [b[2] for b in batch]
 
+    # return indice, image1, image_raw
+    
     return indice, image1
 
 def collate_eval(batch):
@@ -364,6 +368,8 @@ def get_dataset(args, mode, inv_list=[], eqv_list=[]):
         elif mode == 'eval_val':
             dataset = EvalCOCO(args.data_root, res=args.res, split=args.val_type, mode='test', label=False)
         elif mode == 'eval_test':
-            dataset = EvalCOCO(args.data_root, res=args.res, split='val', mode='test', stuff=args.stuff, thing=args.thing)
+            dataset = EvalCOCO(args.data_root, res=args.res, split='train', mode='test', stuff=args.stuff, thing=args.thing)
+        elif mode == 'supervised_train':
+            dataset = EvalCOCO(args.supervised_data_root, res=args.res, split='train', mode='test', stuff=args.stuff, thing=args.thing)
     
     return dataset 
