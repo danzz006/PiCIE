@@ -77,7 +77,7 @@ def run_mini_batch_kmeans(args, logger, dataloader, model, view):
     with torch.no_grad():
         for i_batch, (indice, image ) in enumerate(dataloader):
             # if i_batch >= int(len(dataloader)/2):
-            if i_batch > 4:
+            if i_batch == 4:
 
                 break
             # 1. Compute initial centroids from the first few batches. 

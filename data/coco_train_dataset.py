@@ -52,10 +52,11 @@ class TrainCOCO(data.Dataset):
         imgid = self.imdb[index]
         image = self.load_data(imgid)
 
-        image = self.transform_image(index, image)
+        image_t = self.transform_image(index, image)
         label = self.transform_label(index)
         
-        return (index, ) + image + label
+        return (index, ) + image_t + label
+        # return (index,   image_t[0], image, label[0])
 
 
     def load_data(self, image_id):
@@ -85,6 +86,9 @@ class TrainCOCO(data.Dataset):
         if self.mode == 'compute':
             if self.view == 1:
                 image = self.transform_inv(index, image, 0)
+                
+                image = TF.resize(image, self.res1, Image.BILINEAR)
+                
                 image = self.transform_tensor(image)
             elif self.view == 2:
                 image = self.transform_inv(index, image, 1)
@@ -96,6 +100,8 @@ class TrainCOCO(data.Dataset):
         elif 'train' in self.mode:
             # Invariance transform. 
             image1 = self.transform_inv(index, image, 0)
+            image1 = TF.resize(image1, self.res1, Image.BILINEAR)
+            
             image1 = self.transform_tensor(image1)
 
             if self.mode == 'baseline_train':
