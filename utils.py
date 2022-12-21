@@ -207,11 +207,14 @@ def get_init_centroids(args, K, featlist, index, clustering_="DBSCAN"):
     
     if clustering_ == "DBSCAN":
         # clus = cuDBSCAN(min_samples=5)
-        clus = cuml.dask.cluster.DBSCAN(client=args.client, 
-        output_type="cupy", 
-        max_mbytes_per_batch=8000, 
-        min_samples=300
-        )
+        if args.dist_:
+            clus = cuml.dask.cluster.DBSCAN(client=args.client, 
+            output_type="cupy", 
+            max_mbytes_per_batch=8000, 
+            min_samples=300
+            )
+        else:
+            clus = cuml.cluster.DBSCAN()
     
         # clus = dbscan(min_samples=5)
         print("Clustering features...")
@@ -368,7 +371,11 @@ def get_dataset(args, mode, inv_list=[], eqv_list=[]):
         elif mode == 'eval_val':
             dataset = EvalCOCO(args.data_root, res=args.res, split=args.val_type, mode='test', label=False)
         elif mode == 'eval_test':
+<<<<<<< HEAD
             dataset = EvalCOCO(args.data_root, res=args.res, split='train', mode='test', stuff=args.stuff, thing=args.thing)
+=======
+            dataset = EvalCOCO(args.data_root, res=args.res, split='val', mode='test', stuff=args.stuff, thing=args.thing)
+>>>>>>> 478e6f5a9cceaf09545d4032d8b2f9aeb28badff
         elif mode == 'supervised_train':
             dataset = EvalCOCO(args.supervised_data_root, res=args.res, split='train', mode='test', stuff=args.stuff, thing=args.thing)
     

@@ -287,8 +287,8 @@ def main(args, logger):
                 criterion2 = torch.nn.CrossEntropyLoss().cuda()
 
             # Setup nonparametric classifier.
-            classifier1 = initialize_classifier(args)
-            classifier2 = initialize_classifier(args)
+            classifier1 = initialize_classifier(args, "cuda")
+            classifier2 = initialize_classifier(args, "cuda")
             classifier1.module.weight.data = centroids1.unsqueeze(-1).unsqueeze(-1)
             classifier2.module.weight.data = centroids2.unsqueeze(-1).unsqueeze(-1)
             freeze_all(classifier1)

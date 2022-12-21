@@ -101,13 +101,15 @@ def get_nearest_neighbors(n_query, dataloader, model, classifier, k=10):
 
 class Arguments:
     def __init__(self, 
+                dist_ = True,
                 data_root='../../Data/coco',
+                supervised_data_root = '../../Data/coco_supervisedset',
                 save_root='results',
                 restart_path='',
                 seed=1,
                 num_workers=6,
                 restart=True,
-                num_epoch=10,
+                num_epoch=20,
                 repeats=1,
                 arch='resnet18',
                 pretrain=True,
@@ -115,8 +117,8 @@ class Arguments:
                 res1=320,
                 res2=640,
                 batch_size_cluster=4,
-                batch_size_train=128,
-                batch_size_test=64,
+                batch_size_train=32,
+                batch_size_test=8,
                 lr=1e-4,
                 weight_decay=0,
                 momentum=0.9,
@@ -147,14 +149,15 @@ class Arguments:
                 version=7,
                 fullcoco=False,
                 eval_only=False,
-                eval_path='K_train/checkpoint.pth.tar',
+                eval_path='results',
                 save_model_path='K_train',
                 save_eval_path='K_test',
                 cityscapes=False,
                 faiss_gpu_id=1
                 ):
-
+        self.dist_ = dist_
         self.data_root=data_root
+        self.supervised_data_root=supervised_data_root
         self.save_root=save_root
         self.restart_path=restart_path
         self.seed=seed
