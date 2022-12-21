@@ -83,7 +83,7 @@ def train_supervised(args, logger, dataloader, model, classifier1, classifier2, 
         loss = (loss_across + loss_within) / 2.
         
         if args.lr_scheduler:
-            writer.add_scalar("loss/train-supervised", loss, epoch)
+            writer.add_scalar("loss/train-supervised", loss, i)
         
         
         losses_cet.update(loss.item(), B)
@@ -170,7 +170,7 @@ def train(args, logger, dataloader, model, classifier1, classifier2, criterion1,
         loss = (loss_across + loss_within) / 2.
         
         if args.lr_scheduler:
-            writer.add_scalar("loss/train", loss, epoch)
+            writer.add_scalar("loss/train", loss, i)
         
         losses_cet.update(loss.item(), B)
         
