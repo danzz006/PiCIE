@@ -219,16 +219,6 @@ def main(args, logger):
                                             worker_init_fn=worker_init_fn(args.seed))
     
     
-    # if True:
-    #     trainset_supervised = get_dataset(args, mode='supervised_train', inv_list=inv_list, eqv_list=eqv_list)
-    #     trainloader_supervised = torch.utils.data.DataLoader(trainset_supervised, 
-    #                                             batch_size=args.batch_size_train,
-    #                                             shuffle=False, 
-    #                                             num_workers=args.num_workers,
-    #                                             pin_memory=False,
-    #                                             collate_fn=collate_train,
-    #                                             worker_init_fn=worker_init_fn(args.seed))
-        
     
     testset    = get_dataset(args, mode='train_val')
     testloader = torch.utils.data.DataLoader(testset,
@@ -271,7 +261,7 @@ def main(args, logger):
                                                 collate_fn=collate_train,
                                                 worker_init_fn=worker_init_fn(args.seed))
                 
-                print("reinitialized dataloader for label assignment")
+                print("Reinitialized dataloader for label assignment")
                 
                 
                 weight1 = compute_labels(args, logger, trainloader_assignment, model, centroids1, view=1)
@@ -299,20 +289,19 @@ def main(args, logger):
                 del centroids2
 
             # Set-up train loader.
-            trainset.mode  = 'train'
-            trainloader_loop  = torch.utils.data.DataLoader(trainset, 
-                                                            batch_size=args.batch_size_train, 
-                                                            shuffle=True,
-                                                            num_workers=args.num_workers,
-                                                            pin_memory=False,
-                                                            collate_fn=collate_train,
-                                                            worker_init_fn=worker_init_fn(args.seed))
+            # trainset.mode  = 'train'
+            # trainloader_loop  = torch.utils.data.DataLoader(trainset, 
+            #                                                 batch_size=args.batch_size_train, 
+            #                                                 shuffle=True,
+            #                                                 num_workers=args.num_workers,
+            #                                                 pin_memory=False,
+            #                                                 collate_fn=collate_train,
+            #                                                 worker_init_fn=worker_init_fn(args.seed))
             
             
-            
-            
-            
-            if epoch != 0 and epoch % 4 == 0:
+            if epoch != 0 and epoch % 100 == 0:
+                
+                del trainloader_loop
                 
                 if not args.no_balance:
                     criterion1 = torch.nn.CrossEntropyLoss(weight=weight1, ignore_index=-1).cuda()
@@ -325,7 +314,7 @@ def main(args, logger):
                 trainset_supervised = get_dataset(args, mode='supervised_train', inv_list=inv_list, eqv_list=eqv_list)
                 trainloader_supervised = torch.utils.data.DataLoader(trainset_supervised, 
                                                 batch_size=args.batch_size_train,
-                                                shuffle=False, 
+                                                shuffle=True, 
                                                 num_workers=args.num_workers,
                                                 pin_memory=False,
                                                 collate_fn=collate_eval,
@@ -336,6 +325,14 @@ def main(args, logger):
                     scheduler.step()
                     writer.add_scalar("lr/train-supervised", scheduler.get_lr()[0], epoch)
             else:
+                trainset.mode  = 'train'
+                trainloader_loop  = torch.utils.data.DataLoader(trainset, 
+                                                                batch_size=args.batch_size_train, 
+                                                                shuffle=True,
+                                                                num_workers=args.num_workers,
+                                                                pin_memory=False,
+                                                                collate_fn=collate_train,
+                                                                worker_init_fn=worker_init_fn(args.seed))
                 logger.info('Start training ...')
                 train_loss, train_cet, cet_within, cet_across, train_mse = train(args, logger, trainloader_loop, model, classifier1, classifier2, criterion1, criterion2, optimizer, epoch) 
             
@@ -441,7 +438,7 @@ class Arguments:
                 res1=320,
                 res2=640,
                 batch_size_cluster=60,
-                batch_size_train=256,
+                batch_size_train=80,
                 batch_size_test=32,
                 lr=1e-1,
                 weight_decay=0,
