@@ -2,7 +2,7 @@ import os
 import numpy as np 
 import torch 
 import torch.nn as nn
-from torch.optim.lr_scheduler import ExponentialLR 
+from torch.optim.lr_scheduler import ExponentialLR, StepLR, CosineAnnealingLR
 import matplotlib.pyplot as plt
 from sklearn.utils.linear_assignment_ import linear_assignment
 # from scipy.optimize import linear_sum_assignment as linear_assignment
@@ -34,7 +34,8 @@ def get_model_and_optimizer(args, logger):
 
     if args.lr_scheduler:
         # scheduler = ExponentialLR(optimizer, gamma=0.9)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30)
+        # scheduler = CosineAnnealingLR(optimizer, T_max=20)
+        scheduler = StepLR(optimizer, step_size=7, gamma=0.1)
     # optional restart. 
     args.start_epoch  = 0 
     if args.restart or args.eval_only: 

@@ -212,7 +212,7 @@ def main(args, logger):
     trainset = get_dataset(args, mode='train', inv_list=inv_list, eqv_list=eqv_list)
     trainloader = torch.utils.data.DataLoader(trainset, 
                                             batch_size=args.batch_size_cluster,
-                                            shuffle=False, 
+                                            shuffle=True, 
                                             num_workers=args.num_workers,
                                             pin_memory=False,
                                             collate_fn=collate_train,
@@ -373,6 +373,7 @@ def main(args, logger):
                         },
                         os.path.join(args.save_model_path, 'checkpoint.pth.tar'))
         
+        writer.flush()
         # Evaluate.
         # trainset    = get_dataset(args, mode='eval_val')
         # trainloader = torch.utils.data.DataLoader(trainset, 
@@ -437,13 +438,13 @@ class Arguments:
                 res=320,
                 res1=320,
                 res2=640,
-                batch_size_cluster=60,
+                batch_size_cluster=70,
                 batch_size_train=80,
                 batch_size_test=32,
-                lr=1e-1,
+                lr=1e-2,
                 weight_decay=0,
                 momentum=0.9,
-                optim_type='Adam',
+                optim_type='SGD',
                 num_init_batches=4,
                 num_batches=3,
                 kmeans_n_iter=30,
@@ -547,7 +548,17 @@ if __name__=='__main__':
     client = Client(cluster)    
     args.client = client
     writer = SummaryWriter()
+    writer.add_hparams(
+        {
+            'optimizer': args.optim_type,
+            'learning_rate': args.lr,
+            'batch_size_cluster': args.batch_size_cluster,
+            'batch_size_train': args.batch_size_train,
+            'lr_scheduler': 'StepLR'
+        }, {'hparams/dump': 0}
+    )
     main(args, logger)
+    writer.close()
 
 
 
